@@ -1,0 +1,44 @@
+variables:
+  azureSubscription: 'Visual Studio Enterprise Subscription'
+  appName: 'myapp'
+  resourceGroupName: 'Automation-Demo-RG'
+  vmName: 'azdev01'
+
+jobs:
+- job: Build
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+  - script: |
+      python3 -m venv env
+      source env/bin/activate
+      pip install -r requirements.txt
+  - task: ArchiveFiles@2
+    inputs:
+      rootFolderOrFile: '$(System.DefaultWorkingDirectory)/webapp'
+      includeRootFolder: false
+      archiveType: 'zip'
+      archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+      replaceExistingArchive: true
+
+- job: Deploy
+  dependsOn: Build
+  condition: succeeded()
+  environment: 'myenv'
+  strategy:
+    runOnce:
+      deploy:
+        steps:
+        - task: AzureFileCopy@4
+          inputs:
+            SourcePath: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+            azureSubscription: $(azureSubscription)
+            Destination: 'AzureVMs'
+            storageAccount: 'mystorageaccount'
+            ContainerName: 'mycontainer'
+            ResourceGroupName: $(resourceGroupName)
+            VMs: $(vmName)
+            CleanTargetBeforeCopy: true
